@@ -1,11 +1,20 @@
 import pandas as pd
 import numpy as np
 import math
-
+import geopandas as gpd
+import geopy.distance
+import pyproj
+import shapely.geometry as geom
+from shapely.geometry import Point, LineString
+import osmnx as ox
+import networkx as nx
+import keplergl as kgl
+import datetime as dt
+import time
+import random
+from datetime import datetime, timedelta
 from geojson import LineString
 from keplergl import KeplerGl
-from dksr_lib import trip_layer_config
-from dksr_lib import velocity_layer_config
 
 #Entfernen unnötiger Spalten
 def clean_columns(data,add_col=[], inplace=True):
@@ -143,3 +152,76 @@ def velocity_layer(data):
     #trips = trip_list(data)
     map_1 = KeplerGl(height=800, data={'Trips': data}, config=velocity_layer_config.config)
     return map_1
+
+def extract_sample_network(north, east, south, west, sample_size):
+    """
+    Extracts a sample of road networks within a bounding box and returns a dataframe of routes, assuming a route choice of shortest path.
+    
+    Parameters:
+    -----------
+    north : float
+        The northernmost coordinate of the bounding box.
+    south : float
+        The southernmost coordinate of the bounding box.
+    east : float
+        The easternmost coordinate of the bounding box.
+    west : float
+        The westernmost coordinate of the bounding box.
+    sample_size : int
+        The number of routes to sample.
+    
+    Returns:
+    --------
+    df : pandas.DataFrame
+        A dataframe with two columns: 'coordinates', which contains a list of coordinates for each route, and 'length_km', which contains the length of each route in kilometers.
+    """
+    
+    # Download the street network within the bounding box
+    G = ox.graph_from_bbox(north, south, east, west, network_type='drive')
+
+    # Get a list of all nodes in the graph
+    all_nodes = list(G.nodes())
+
+    # Initialize the list of routes
+    routes = []
+
+    # Extract a random sample of routes
+    while len(routes) < sample_size:
+        # Choose a random origin node
+        origin = random.choice(all_nodes)
+
+        # Find all nodes that are reachable from the origin
+        reachable_nodes = nx.descendants(G, origin) # type: ignore
+
+        if len(reachable_nodes) == 0:
+            continue
+
+        # Choose a random destination node from the reachable nodes
+        destination = random.choice(list(reachable_nodes))
+
+        # Check if a route exists
+        try:
+            route = nx.shortest_path(G, origin, destination, weight='travel_time')
+            routes.append(route)
+        except nx.NetworkXNoPath: # type: ignore
+            continue
+
+    # Extract the lat, lon values from every node
+    coords = []
+    lengths_km = []
+    for route in routes:
+        route_coords = []
+        length_m = 0
+        for i in range(len(route)-1):
+            node1 = G.nodes[route[i]]
+            node2 = G.nodes[route[i+1]]
+            coords1 = (node1['y'], node1['x'])
+            coords2 = (node2['y'], node2['x'])
+            length_m += geopy.distance.distance(coords1, coords2).m
+            route_coords.append([node1['y'], node1['x']])
+        coords.append(route_coords)
+        lengths_km.append(length_m/1000)
+
+    routes = pd.DataFrame({'coordinates': coords, 'length_km': lengths_km})
+
+    return routes
