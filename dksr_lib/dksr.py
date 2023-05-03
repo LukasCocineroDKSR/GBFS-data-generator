@@ -153,7 +153,8 @@ def velocity_layer(data):
     map_1 = KeplerGl(height=800, data={'Trips': data}, config=velocity_layer_config.config)
     return map_1
 
-def extract_sample_network(north, east, south, west, sample_size):
+
+def extract_sample_network(north, east, south, west, sample_size,seed=None):
     """
     Extracts a sample of road networks within a bounding box and returns a dataframe of routes, assuming a route choice of shortest path.
     
@@ -169,6 +170,8 @@ def extract_sample_network(north, east, south, west, sample_size):
         The westernmost coordinate of the bounding box.
     sample_size : int
         The number of routes to sample.
+    seed : int, optional
+        Seed value for the random number generator.
     
     Returns:
     --------
@@ -176,6 +179,9 @@ def extract_sample_network(north, east, south, west, sample_size):
         A dataframe with two columns: 'coordinates', which contains a list of coordinates for each route, and 'length_km', which contains the length of each route in kilometers.
     """
     
+    # Set the seed value for the random number generator
+    random.seed(seed)
+
     # Download the street network within the bounding box
     G = ox.graph_from_bbox(north, south, east, west, network_type='drive')
 
