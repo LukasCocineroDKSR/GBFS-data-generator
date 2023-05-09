@@ -19,6 +19,9 @@ from shapely.geometry import LineString as shapLS
 from shapely.ops import unary_union
 from shapely import MultiPoint
 
+from dksr_lib import trip_layer_config
+from dksr_lib import velocity_layer_config
+
 #Entfernen unnötiger Spalten
 def clean_columns(data,add_col=[], inplace=True):
     drop_columns = ['vehicle_type','accuracy','propulsion_types','SID','timestamp','_headers.eventType'] + add_col
@@ -122,10 +125,10 @@ def trip_layer(data):
         list1 = np.insert(list0,2,z_list,axis=1)
         list2 = np.insert(list1,3,data['timestamps_list'][i],axis=1)
         
-        geo_list.iloc[i] = [LineString(list2.tolist())]
-        geo_no_time.iloc[i] = [LineString(list1.tolist())]
+        geo_list.iloc[i] = [geoLS(list2.tolist())]
+        geo_no_time.iloc[i] = [geoLS(list1.tolist())]
 
-    map_0 = KeplerGl(height=800, data={'Scooters': geo_list})#, config=trip_layer_config.config)
+    map_0 = KeplerGl(height=800, data={'Scooters': geo_list}, config=trip_layer_config.config)
     return map_0
 
 
