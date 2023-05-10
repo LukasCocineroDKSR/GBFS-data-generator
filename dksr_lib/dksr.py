@@ -115,7 +115,8 @@ def wait_list(data):
 
 
 
-def trip_layer(data):
+def trip_layer(data, config=False):
+
     geo_list = pd.DataFrame(np.zeros((len(data)),dtype=object),columns=['geo_json'])
     geo_no_time = pd.DataFrame(np.zeros((len(data)),dtype=object),columns=['geo_json'])
                             
@@ -128,7 +129,11 @@ def trip_layer(data):
         geo_list.iloc[i] = [geoLS(list2.tolist())]
         geo_no_time.iloc[i] = [geoLS(list1.tolist())]
 
-    map_0 = KeplerGl(height=800, data={'Scooters': geo_list}, config=trip_layer_config.config)
+    if config == False:
+        map_0 = KeplerGl(height=800, data={'Scooters': geo_list})
+    else:
+        config = config
+        map_0 = KeplerGl(height=800, data={'Scooters': geo_list}, config = config)
     return map_0
 
 
