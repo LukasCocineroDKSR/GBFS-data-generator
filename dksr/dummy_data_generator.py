@@ -1,7 +1,7 @@
 from shapely.geometry import LineString as shapLS
 from shapely.ops import unary_union
 from shapely import MultiPoint
-from dksr_lib.dksr import *
+from dksr.micro_mobility_MDS import *
 
 def extract_sample_network(north, east, south, west, sample_size,seed=None):
     """

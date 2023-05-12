@@ -19,8 +19,8 @@ from shapely.geometry import LineString as shapLS
 from shapely.ops import unary_union
 from shapely import MultiPoint
 
-from dksr_lib import trip_layer_config
-from dksr_lib import velocity_layer_config
+from dksr import trip_layer_config
+from dksr import velocity_layer_config
 
 #Entfernen unnötiger Spalten
 def clean_columns(data,add_col=[], inplace=True):
@@ -122,7 +122,7 @@ def trip_layer(data, config=False):
     --------
     data: pandas.DataFrame
         The trip data containing the following columns:
-        'device_id', 'timestamp', 'latitude', 'longitude', 'accuracy'
+        'device_id', 'timestamps_list', 'latitude', 'longitude', 'accuracy'
     config: dict, optional
         The KeplerGl map configuration. Default is False, which uses the default configuration.
     
@@ -130,34 +130,27 @@ def trip_layer(data, config=False):
     --------
     KeplerGl map object
     """
-    
-    # Create empty dataframes to store GeoJSON strings
-    geo_list = pd.DataFrame(np.zeros((len(data)), dtype=object), columns=['geo_json'])
-    geo_no_time = pd.DataFrame(np.zeros((len(data)), dtype=object), columns=['geo_json'])
-    
-    # Iterate over each row of the data
-    for i in range(0, len(data)):
+
+    geo_list = pd.DataFrame(np.zeros((len(data)),dtype=object),columns=['geo_json'])
+    geo_no_time = pd.DataFrame(np.zeros((len(data)),dtype=object),columns=['geo_json'])
+                            
+    for i in range(0,len(data)):                       
+        z_list = [0] * len(data['timestamps_list'][i])
+        list0 = data['coordinates'][i]
+        list1 = np.insert(list0,2,z_list,axis=1)
+        list2 = np.insert(list1,3,data['timestamps_list'][i],axis=1)
         
-        # Create a list of zeros of length equal to number of timestamps in the row
-        z_list = [0] * len(data['timestamp'][i])
-        
-        # Combine the coordinates and timestamps lists for the row
-        list0 = data[['longitude', 'latitude']].iloc[i].to_numpy()
-        list1 = np.insert(list0, 2, z_list, axis=1)
-        list2 = np.insert(list1, 3, data['timestamp'][i], axis=1)
-        
-        # Convert the list to a GeoJSON LineString
         geo_list.iloc[i] = [geoLS(list2.tolist())]
         geo_no_time.iloc[i] = [geoLS(list1.tolist())]
-    
-    # Create KeplerGl map object using the GeoJSON dataframes
+
     if config == False:
         map_0 = KeplerGl(height=800, data={'Trips': geo_list})
     else:
         config = config
         map_0 = KeplerGl(height=800, data={'Trips': geo_list}, config=config)
-        
+
     return map_0
+
 
 
 
