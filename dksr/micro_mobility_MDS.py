@@ -28,7 +28,7 @@ def clean_columns(data,add_col=[], inplace=True):
     for header in data.keys():
         if header in drop_columns:
             data.drop([header],axis=1,inplace=inplace)
-
+    return data
 
 def get_origin_target(data):
     data['origin'] = data['coordinates'].apply(lambda x: x[0])
