@@ -109,6 +109,7 @@ def trace_transform(df, speed, distance_delta):
         length_km = row['length_km']
         
         # create points by given distance_delta
+        try:
         line = shapLS(coordinates)
         distances = np.arange(0, line.length, distance_delta)
         points = MultiPoint([line.interpolate(distance) for distance in distances])
@@ -162,41 +163,45 @@ def trace_transform(df, speed, distance_delta):
     """
     df_list = []
     
-    # iterate over each row in the input dataframe
     for index, row in df.iterrows():
         coordinates = row['coordinates']
         length_km = row['length_km']
         
-        # create points by given distance_delta
-        line = shapLS(coordinates)
-        distances = np.arange(0, line.length, distance_delta)
-        points = MultiPoint([line.interpolate(distance) for distance in distances])
-        lat_lon_values = [[p.x, p.y] for p in points.geoms]
+        try:
+            # create points by given distance_delta
+            line = shapLS(coordinates)
+            distances = np.arange(0, line.length, distance_delta)
+            points = MultiPoint([line.interpolate(distance) for distance in distances])
+            lat_lon_values = [[p.x, p.y] for p in points.geoms]
 
-        # partition_length in km   
-        total_points = len(lat_lon_values)
-        partition_length = (length_km / total_points)
+            # partition_length in km   
+            total_points = len(lat_lon_values)
+            partition_length = (length_km / total_points)
 
-        # time distance in seconds
-        time_delta = (partition_length / speed) * 3600
+            # time distance in seconds
+            time_delta = (partition_length / speed) * 3600
 
-        row_timestamps = []
+            row_timestamps = []
+            
+            for i in range(total_points):
+                if i == 0:
+                    # set initial timestamp to current time
+                    row_timestamps.append(int(time.time()))
+                else:
+                    # calculate the time delta from the previous point
+                    time_delta = (partition_length / speed) * 3600
+                    # add the time delta to the previous timestamp
+                    prev_timestamp = row_timestamps[-1]
+                    next_timestamp = prev_timestamp + time_delta
+                    # append the new timestamp to the list
+                    row_timestamps.append(int(next_timestamp))
+            
+            # append the new row as a new dataframe to the list
+            df_list.append(pd.DataFrame({'coordinates': [lat_lon_values], 'length_km': [length_km], 'timestamps_list': [row_timestamps]}))
         
-        for i in range(total_points):
-            if i == 0:
-                # set initial timestamp to current time
-                row_timestamps.append(int(time.time()))
-            else:
-                # calculate the time delta from the previous point
-                time_delta = (partition_length / speed) * 3600
-                # add the time delta to the previous timestamp
-                prev_timestamp = row_timestamps[-1]
-                next_timestamp = prev_timestamp + time_delta
-                # append the new timestamp to the list
-                row_timestamps.append(int(next_timestamp))
-        
-        # append the new row as a new dataframe to the list
-        df_list.append(pd.DataFrame({'coordinates': [lat_lon_values], 'length_km': [length_km], 'timestamps_list': [row_timestamps]}))
+        except Exception as e:
+            print(f"Skipping row: {index} - {str(e)}")
+            continue
     
     # concatenate all the dataframes in the list into a single dataframe
     new_df = pd.concat(df_list, ignore_index=True)
