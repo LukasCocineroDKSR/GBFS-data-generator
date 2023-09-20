@@ -1,7 +1,21 @@
 from shapely.geometry import LineString as shapLS
 from shapely.ops import unary_union
 from shapely import MultiPoint
-from dksr.micro_mobility_MDS import *
+from geojson import LineString as geoLS
+import pandas as pd
+import numpy as np
+import math
+import geopandas as gpd
+import geopy.distance
+import pyproj
+import shapely.geometry as geom
+import osmnx as ox
+import networkx as nx
+import keplergl as kgl
+import datetime as dt
+import time
+import datetime
+import random
 
 def extract_sample_network(north, east, south, west, sample_size,seed=None):
     """
@@ -83,67 +97,70 @@ def extract_sample_network(north, east, south, west, sample_size,seed=None):
 
 
 def trace_transform(df, speed, distance_delta):
-    """
-    Takes a pandas dataframe with columns 'coordinates' and 'length_km', and returns a new dataframe with three columns: 'coordinates', 'length_km', and 'timestamps_list'.
-    Each row in the new dataframe contains a list of coordinates, a length in kilometers, and a list of Unix timestamps indicating the time at which each point was reached, assuming a constant speed between points.
-    
-    Parameters:
-    --------
-    df : pandas.DataFrame
-        A dataframe with two columns: 'coordinates', which contains a list of coordinate pairs for each route, and 'length_km', which contains the length of each route in kilometers.
-    speed : float
-        The average speed of movement, in kilometers per hour.
-    distance_delta : float
-        The distance between consecutive points, in kilometers.
-    
-    Returns:
-    --------
-    new_df : pandas.DataFrame
-        A dataframe with three columns: 'coordinates', 'length_km', and 'timestamps_list', where 'coordinates' contains a list of coordinates, 'length_km' contains the length of the route in kilometers, and 'timestamps_list' contains a list of Unix timestamps indicating the time at which each point was reached.
-    """
     df_list = []
     
+    # Partition initialization
+    current_date = datetime.datetime.now().date()
+    partition_scheme = [
+        (0.1, datetime.datetime.combine(current_date, datetime.time(6, 0)), datetime.timedelta(hours=2)),  # 6 AM to 8 AM
+        (0.2, datetime.datetime.combine(current_date, datetime.time(8, 0)), datetime.timedelta(hours=2)),  # 8 AM to 10 AM
+        (0.3, datetime.datetime.combine(current_date, datetime.time(10, 0)), datetime.timedelta(hours=4)), # 10 AM to 2 PM
+        (0.2, datetime.datetime.combine(current_date, datetime.time(14, 0)), datetime.timedelta(hours=2)), # 2 PM to 4 PM
+        (0.2, datetime.datetime.combine(current_date, datetime.time(16, 0)), datetime.timedelta(hours=2)), # 4 PM to 6 PM
+    ]
+    
+    total_rows = len(df)
+    current_partition_index = 0
+    rows_processed_in_partition = 0
+
     for index, row in df.iterrows():
         coordinates = row['coordinates']
         length_km = row['length_km']
+
+        if len(coordinates) <= 1:
+            print(f"Skipping row {index}: Not enough points to form a line.")
+            continue
         
         try:
-            # create points by given distance_delta
+            # Assuming you have shapLS function defined elsewhere to generate the line from coordinates
             line = shapLS(coordinates)
             distances = np.arange(0, line.length, distance_delta)
             points = MultiPoint([line.interpolate(distance) for distance in distances])
             lat_lon_values = [[p.x, p.y] for p in points.geoms]
 
-            # partition_length in km   
+            # partition_length in km
             total_points = len(lat_lon_values)
             partition_length = (length_km / total_points)
 
-            # time distance in seconds
-            time_delta = (partition_length / speed) * 3600
+            fraction, start_time, duration = partition_scheme[current_partition_index]
+            partition_rows = int(fraction * total_rows)
+            delay_per_row = duration / partition_rows
 
-            row_timestamps = []
-            
-            for i in range(total_points):
-                if i == 0:
-                    # set initial timestamp to current time
-                    row_timestamps.append(int(time.time()))
-                else:
-                    # calculate the time delta from the previous point
-                    time_delta = (partition_length / speed) * 3600
-                    # add the time delta to the previous timestamp
-                    prev_timestamp = row_timestamps[-1]
-                    next_timestamp = prev_timestamp + time_delta
-                    # append the new timestamp to the list
-                    row_timestamps.append(int(next_timestamp))
-            
-            # append the new row as a new dataframe to the list
+            # Calculate the start timestamp for the current row
+            start_timestamp = start_time + rows_processed_in_partition * delay_per_row
+            start_timestamp = start_timestamp.timestamp()
+
+            row_timestamps = [int(start_timestamp)]
+            for i in range(1, total_points):  # Starting from 1 because we already have the start timestamp
+                time_delta = (partition_length / speed) * 3600
+                next_timestamp = row_timestamps[-1] + time_delta
+                row_timestamps.append(int(next_timestamp))
+
+            rows_processed_in_partition += 1
+
+            # Move to next partition if necessary
+            if rows_processed_in_partition >= partition_rows:
+                current_partition_index += 1
+                rows_processed_in_partition = 0
+
+            # Append the new row as a new dataframe to the list
             df_list.append(pd.DataFrame({'coordinates': [lat_lon_values], 'length_km': [length_km], 'timestamps_list': [row_timestamps]}))
         
         except Exception as e:
-            print(f"Skipping row: {index} - {str(e)}")
+            print(f"Error processing row {index}: {str(e)}")
             continue
-    
-    # concatenate all the dataframes in the list into a single dataframe
+
+    # Concatenate all the dataframes in the list into a single dataframe
     new_df = pd.concat(df_list, ignore_index=True)
 
     return new_df
